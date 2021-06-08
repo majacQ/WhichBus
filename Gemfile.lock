@@ -45,11 +45,19 @@ GEM
     concurrent-ruby (1.1.9)
     daemons (1.1.8)
     dalli (2.0.3)
+  <<<<<<< master
     devise (2.2.8)
+  =======
+    devise (2.0.4)
+  >>>>>>> dev
       bcrypt-ruby (~> 3.0)
       orm_adapter (~> 0.1)
       railties (~> 3.1)
+  <<<<<<< master
       warden (~> 1.2.1)
+  =======
+      warden (~> 1.1.1)
+  >>>>>>> dev
     disqus (1.0.4)
       json
     erubis (2.7.0)
@@ -77,6 +85,7 @@ GEM
     mime-types (1.18)
     multi_json (1.15.0)
     multipart-post (1.1.5)
+    newrelic_rpm (3.3.4.1)
     nifty-generators (0.4.6)
     oauth2 (0.6.1)
       faraday (~> 0.7)
@@ -158,6 +167,7 @@ DEPENDENCIES
   geocoder
   jquery-rails
   json_pure
+  newrelic_rpm
   nifty-generators
   omniauth-facebook
   pg

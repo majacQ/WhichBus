@@ -5,6 +5,7 @@ body {
 	background: #E9F2F5;
 }
 
+  <<<<<<< master
 .flyout.small.right li{
 
 	margin-top:10px;
@@ -32,6 +33,8 @@ body {
 	-webkit-border-radius:0px 0px 0px 10px;
 }
 
+  =======
+  >>>>>>> dev
 .disqus-thread{
 	margin-top:15px;
 }
@@ -86,12 +89,12 @@ div.left-sidebar {
 }
 
 /* the list within the sidebar */
-ul.list {
+ul.list, div#comments {
 	overflow-y: auto;
 	overflow-x: hidden;
 	position: absolute;
 	bottom: 30px;
-	top: 100px;
+	top: 75px;
   	background: #E9F2F5; /*url("<%= image_path 'grayfabricbg.jpg' %>") repeat;*/
 }
 ul.list.two-up, ul.list.three-up {
@@ -655,6 +658,12 @@ button.search {
 	padding: 10px 30px 5px 30px;
 	margin: 10px auto auto;
 }
+a.favorites {
+	font-size: 20px;
+	padding: 6px;
+	margin-bottom: 7px;
+	margin-right: 5px;
+}
 
 button.button.go {
 	float:left;
@@ -743,8 +752,13 @@ form.directions, form.new_user {
 	border: 1px solid #dedede;
 	box-shadow: 1px 1px 15px 0 #d4d4d4;
 }
+  <<<<<<< master
+  =======
+
+  >>>>>>> dev
 .social_buttons+ {
 	margin-top:5px;
+	line-height:59px;
 }
 .social_buttons div {
 	display:inline-block;
@@ -762,6 +776,10 @@ form.directions, form.new_user {
 	border: none;
 	display:inline-block;
 }
+  <<<<<<< master
+  =======
+
+  >>>>>>> dev
 div.auth {
 	margin-top: 35px !important;
 }
@@ -848,4 +866,10 @@ div.auth {
 	.journey.description {
 		max-width: 100%;
 	}
+  <<<<<<< master
 }
+  =======
+}
+
+.cluster { display: none; visibility: hidden }
+  >>>>>>> dev
