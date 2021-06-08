@@ -1,6 +1,8 @@
 allMarkers = new Array
 namedMarkers = {}
 nearbyMarkers = new Array
+crimeMarkers = new Array
+crimeStops = {}
 
 detectBrowser = () ->
 	mapdiv = $("#map_canvas")
@@ -70,6 +72,14 @@ window.stopMarker = (stop, group = null, handler = null) ->
 			# icon: "<%= asset_path 'busstop.png' %>"
 			group: group
 			handler: handler
+
+window.crimeMarker = (crime, group = null, handler = null) ->
+	markerOptions
+		title: crime.summarized_offense_description
+		position: latlng(crime.latitude, crime.longitude)
+		# icon: "<%= asset_path 'busstop.png' %>"
+		group: group
+		handler: handler
 
 # creates a polyline! takes standard polyline options
 polyline = (options) ->
@@ -148,6 +158,9 @@ clickStopMarker = (stop) -> () ->
 	$("#page-header").text(stop.title)
 	loadStopSchedule stop.id
 
+clickCrimeMarker = (crime) -> () ->
+	console.log "Crime marker clicked #{crime}"
+
 # TODO: implement this filter parameter! it needs to come from somewhere, only Ruby knows about it
 # load arrivals for the given stop and display in list
 loadStopSchedule = (stopId, filter = "") ->
@@ -188,23 +201,106 @@ loadNearbyRoutes = window.loadNearbyRoutes = (query) -> (position) ->
 		for route in result
 			list.append li "row display route", routeLink(route.shortName, route.id), span "route description ellipsis", route.description
 
+#Loads the route on the map?
 loadRoute = window.loadRoute = (routeId) ->
-	url = "/route/#{routeId}.json"
-	get url, {}, (result, list) =>
-		for group in result.stopGroups
-			# make list items for group names and stop names
-			list.append li "row display group", tag "<h4>", "", group.name.name
-			for stop in group.stops
-				list.append li "row display stop", link "/stop/#{stop.id}", "stop name", stop.name
-				stopMarker stop #, null, clickStopMarker(stop)
-			# draw the group's polylines
-			for line in group.polylines
-				polyline
-						strokeColor: '#090',
-						strokeOpacity: 1,
-						strokeWeight: 4,
-						path: google.maps.geometry.encoding.decodePath(line.points)
+    url = "/route/#{routeId}.json"
+    get url, {}, (result, list) =>
+        for group in result.stopGroups
+            # make list items for group names and stop names
+            list.append li "row display group", tag "<h4>", "", group.name.name
+            for stop in group.stops
+                list.append li "row display stop", link "/stop/#{stop.id}", "stop name", stop.name
+                stopMarker stop #, null, clickStopMarker(stop)
+            # draw the group's polylines
+            for line in group.polylines
+                polyline
+                        strokeColor: '#090',
+                        strokeOpacity: 1,
+                        strokeWeight: 4,
+                        path: google.maps.geometry.encoding.decodePath(line.points)
 
+calculate_distance = (from, to) ->
+  to_rad = (num) ->
+    num * Math.PI / 180
+
+  R = 6371
+  dLat = to_rad(to.lat-from.lat)
+  dLon = to_rad(to.lon-from.lon)
+  lat1 = to_rad(from.lat)
+  lat2 = to_rad(to.lat)
+
+  a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2)
+  c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return R * c
+
+
+loadCrimeStatsByFirstAndLast = window.loadCrimeStatsByFirstAndLast = (stops) ->
+    console.log "Loading crime..."
+    distance = 500
+    first_stop = stops[0]
+    last_stop  = stops.pop()
+    first_url  = "/stats/get-by-distance/#{first_stop.latitude}/#{first_stop.longitude}/#{distance}/crime.json"
+    last_url   = "/stats/get-by-distance/#{last_stop.latitude}/#{last_stop.longitude}/#{distance}/crime.json"
+    console.log "Found: #{first_stop} and #{last_stop}"
+    loadCrimeStats([first_url, last_url])
+
+loadCrimeStats = window.loadCrimeStats = (urls) ->
+    for url in urls
+        $.get url, {}, (crimes)=>
+            clearMarkerGroup crimeMarkers
+            for crime in crimes
+                latLng = new google.maps.LatLng(crime.latitude, crime.longitude)
+                marker = new google.maps.Marker({'position': latLng, 'title': crime.summarized_offense_description})
+                crimeMarkers.push(marker)
+            markerCluster = new MarkerClusterer(@googleMap, crimeMarkers)
+
+
+            # classify stops based on the distance to the cluster center
+            google.maps.event.addListener markerCluster, 'clusteringend', (clusterer) ->
+              # reset crime data between cluster generations
+              for stop in allMarkers
+                stop.crimes = 0
+              for cluster in clusterer.getClusters()
+                from = cluster.getCenter()
+                for code, to of crimeStops
+                  distance = calculate_distance({lat: from['$a'], lon: from['ab']}, to)
+                  if distance < 0.200
+                    stop =_.find(allMarkers, (marker) => marker.title == to.name)
+                    stop.crimes ?= 0
+                    stop.crimes += cluster.getSize()
+              for stop in allMarkers
+                if stop.crimes > 1000
+                  stop.setIcon('<%= asset_path 'busstop_red.png' %>')
+                else if stop.crimes > 500
+                  stop.setIcon('<%= asset_path 'busstop_yellow.png' %>')
+
+
+            #google.maps.event.addListener markerCluster, 'mouseover', (cluster) ->
+                #console.log(cluster.getSize(), ' crimes in the area.')
+                #stats = {}
+                #for marker in cluster.getMarkers()
+                #    stats[marker.title] ?= 0
+                #    stats[marker.title] += 1
+                #console.log stats
+                #console.log stats
+                #console.log cluster
+                #content = ''
+
+                # Convert lat/long from cluster object to a usable MVCObject
+                #info = new google.maps.MVCObject
+                #info.set 'position', cluster.center_
+
+                #infowindow = new google.maps.InfoWindow
+                #infowindow.close
+                #infowindow.setContent stats
+                #console.log 'opening infowindow'
+                #infowindow.open @googleMap, info
+                #console.log infowindow
+
+
+
+#Loads the actual buses on the route?
 loadRouteTrips = window.loadRouteTrips = (routeId) ->
 	url = "/route/#{routeId}/trips.json"
 	get url, {}, (result, list) =>
@@ -259,8 +355,8 @@ window.showJourney = (from, to, userPosition) ->
 # returns a geolocation callback that takes the user's position
 loadJourney = (from, to) -> (position) ->
 	$("#page-title").text("Directions")
-	#	title = $("#page-header")
-	#	title.html("Loading directions from #{from} to #{to}...").fadeIn()
+	#   title = $("#page-header")
+	#   title.html("Loading directions from #{from} to #{to}...").fadeIn()
 	# @dataFunction = -> loadJourney(from, to)(position) # TODO: set the dataFunction so we can refresh
 
 	if position?
@@ -269,6 +365,7 @@ loadJourney = (from, to) -> (position) ->
 		from = userPosition if from.toLowerCase() in hereStrings
 		to = userPosition if to.toLowerCase() in hereStrings
 	list = $("#model-list")
+	list.css opacity: '1.0'
 	list.fadeOut -> list.html("<li id=\"loading_spinner\"></li>").fadeIn()
 	loadingSpinner()
 	getJourney(from, to)
@@ -277,49 +374,73 @@ loadJourney = (from, to) -> (position) ->
 window.getJourney = (from, to) ->
 	get "/options.json", {
 	from: if typeof(from) == "object" then from = from.toString() else from
-	to: if typeof(to) == "object" then to = to.toString() else to}, processJourneyResult
+	to: if typeof(to) == "object" then to = to.toString() else to }, processJourneyResult
 
 processJourneyResult = (result, list) =>
-	$("#page-title").text("Directions")
-	title = $("#page-header")
-	#returns three things: from, to, and trips
-	from = result["from"]
-	to = result["to"]
-	# build title from the first two items
-	#  title.fadeOut 'medium', ->
-	#    title.html("<em>From:</em> ").append(from.name).append("<br>")
-	#    title.append("<em>To:</em> ").append(to.name).fadeIn()
-	$("#fromAddress").val(from.name)
-	$("#toAddress").val(to.name)
-	# create markers for origin and destination, clear previous markers if they exist
-	@fromMarker.setMap null if @fromMarker?
-	@fromMarker = markerOptions
-			title: from.name
-			position: latlng(from.latitude, from.longitude)
-			icon: "http://thydzik.com/thydzikGoogleMap/markerlink.php?text=A&color=FC6355"
-			draggable: true
-	# allow user to drag endpoints to recalculate journey
-	@toMarker.setMap null if @toMarker?
-	@toMarker = markerOptions
-			title: to.name
-			position: latlng(to.latitude, to.longitude)
-			icon: "http://thydzik.com/thydzikGoogleMap/markerlink.php?text=B&color=FC6355"
-			draggable: true
-	# add event listeners for dragging start and end markers
-	google.maps.event.addListener fromMarker, 'dragend', (mouse) ->
-		getJourney(mouse.latLng, toMarker.position)
-	google.maps.event.addListener toMarker, 'dragend', (mouse) ->
-		getJourney(fromMarker.position, mouse.latLng)
-	# construct a function to refresh the journeys (mostly to update times)
-	@dataFunction = -> getJourney(fromMarker.position, toMarker.position)
-	bounds = new google.maps.LatLngBounds(fromMarker.position, fromMarker.position).extend(toMarker.position)
-	@googleMap.fitBounds bounds
-	# iterate through trips, adding journey row for each one
-	if result["trips"].length == 0
-		list.append journeyDisplayError "No connecting buses found."
-	else
-		for trip in result["trips"]
-			list.append journeyDisplay(trip).fadeIn()
+    $("#page-title").text("Directions")
+    title = $("#page-header")
+    #returns three things: from, to, and trips
+    from = result["from"]
+    to = result["to"]
+    # build title from the first two items
+    #  title.fadeOut 'medium', ->
+    #    title.html("<em>From:</em> ").append(from.name).append("<br>")
+    #    title.append("<em>To:</em> ").append(to.name).fadeIn()
+    $("#fromAddress").val(from.name)
+    $("#toAddress").val(to.name)
+    # create markers for origin and destination, clear previous markers if they exist
+    @fromMarker.setMap null if @fromMarker?
+    @fromMarker = markerOptions
+            title: from.name
+            position: latlng(from.latitude, from.longitude)
+            icon: "http://thydzik.com/thydzikGoogleMap/markerlink.php?text=A&color=FC6355"
+            draggable: true
+    # allow user to drag endpoints to recalculate journey
+    @toMarker.setMap null if @toMarker?
+    @toMarker = markerOptions
+            title: to.name
+            position: latlng(to.latitude, to.longitude)
+            icon: "http://thydzik.com/thydzikGoogleMap/markerlink.php?text=B&color=FC6355"
+            draggable: true
+    # add event listeners for dragging start and end markers
+    google.maps.event.addListener fromMarker, 'dragend', (mouse) ->
+        getJourney(mouse.latLng, toMarker.position)
+    google.maps.event.addListener toMarker, 'dragend', (mouse) ->
+        getJourney(fromMarker.position, mouse.latLng)
+    # construct a function to refresh the journeys (mostly to update times)
+    @dataFunction = -> getJourney(fromMarker.position, toMarker.position)
+    bounds = new google.maps.LatLngBounds(fromMarker.position, fromMarker.position).extend(toMarker.position)
+    @googleMap.fitBounds bounds
+    # iterate through trips, adding journey row for each one
+    if result["trips"].length == 0
+        list.append journeyDisplayError "No connecting buses found."
+        # TODO: Replace with an API call.
+
+
+
+        get "/deals/"+"Seattle"+".json", {}, (data) ->
+
+            deals = []
+            #deals = ({ name:  listing["name"], phone: listing["phone"],type: 'taxi'} for listing in data)
+            deals = ({  name:  listing["name"], phone: '(206) 622-6500' ,type: 'taxi'} for listing in data)
+            
+            #deals = [
+                #{name:'Yellow Taxi', phone: '(206) 622-6500', type: 'taxi'},
+                #{name: 'Orange Cab', phone: '(206) 522-8800', type: 'taxi'}
+            #]
+
+            for deal in deals
+                list.append journeyDisplayDeal(deal).fadeIn()
+    else
+        crimeStops = {}
+        for trip in result["trips"]
+            list.append journeyDisplay(trip).fadeIn()
+            crimeStops[trip.from.code] = trip.from
+            crimeStops[trip.to.code] = trip.to
+            #console.log 'STOP', trip.to
+
+    # place the crime data around the from and to markers
+    loadCrimeStatsByFirstAndLast [from, to]
 window.loadJourney = loadJourney
 
 # calls the dataFunction if it is set
@@ -347,14 +468,17 @@ window.initializeMap = initializeMap
 initializeMapOptions = (options) ->
 	defaultPosition = defaultValue(options.defaultPosition, latlng(47.652709, -122.32149))
 	mapOptions =
-	zoom: defaultValue(options.zoom, 13)
-	center: defaultPosition
-	mapTypeId: defaultValue(options.mapType, google.maps.MapTypeId.ROADMAP)
-	disableDefaultUI: true
+		zoom: defaultValue(options.zoom, 13)
+		center: defaultPosition
+		mapTypeId: defaultValue(options.mapType, google.maps.MapTypeId.ROADMAP)
+		disableDefaultUI: true
+		zoomControl: true
+		zoomControlOptions:
+			position: google.maps.ControlPosition.RIGHT_BOTTOM
 
 	@googleMap = new google.maps.Map(document.getElementById("map_canvas"), mapOptions)
 	# a marker showing where the user last clicked (generally the query point)
-	@clickMarker = markerOptions({title: "Seattle", position: defaultPosition})
+	#@clickMarker = markerOptions({title: "Seattle", position: defaultPosition})
 	# register click handler, wrapping it in a function to extract the latLng object
 	if options.clickHandler?
 		google.maps.event.addListener(@googleMap, 'click', (event) -> options.clickHandler event.latLng)
