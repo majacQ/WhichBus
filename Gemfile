@@ -7,7 +7,7 @@ gem 'rails', '3.2'
 group :production do
  gem 'pg' 
  gem 'thin'
- gem 'dalli'
+ gem 'dalli', '>= 3.2.3'
  gem 'newrelic_rpm'
 end
 group :development, :test do
